@@ -18,6 +18,7 @@ class QuickRequest {
     Map<String, dynamic>? queryParameters,
     RequestMethod requestMethod = RequestMethod.GET,
     bool authorize = false,
+    bool expectJsonArray = false, // JSON array bekleniyor mu?
   }) async {
     var headers = <String, String>{};
 
@@ -48,8 +49,13 @@ class QuickRequest {
     if (response.statusCode == 200) {
       var responseBody = await response.stream.bytesToString();
       var jsonData = json.decode(responseBody);
+
+      var actualData = jsonData is Map<String, dynamic> && jsonData.containsKey('data')
+          ? jsonData['data']
+          : jsonData;
+
       return ResponseModel(
-        data: jsonData["data"],
+        data: actualData,
         error: jsonData['error'] ?? false,
         message: jsonData['message'] ?? "",
       );

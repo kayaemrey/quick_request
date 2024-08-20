@@ -1,11 +1,11 @@
 name: quick_request
-description: A Flutter package to simplify HTTP requests with support for GET, POST, PUT, PATCH, and DELETE methods. Includes automatic JSON encoding and decoding, and a ResponseModel for handling responses efficiently.
-version: 0.0.1
+description: A Flutter package to simplify HTTP requests (GET, POST, PUT, PATCH, DELETE) with automatic JSON encoding/decoding and efficient response handling using ResponseModel.
+version: 0.0.4
 homepage: https://github.com/kayaemrey/quick_request
 repository: https://github.com/kayaemrey/quick_request
 
 environment:
-  sdk: '>=3.4.4 <4.0.0'
+  sdk: '>=3.2.3 <4.0.0'
   flutter: ">=1.17.0"
 
 dependencies:

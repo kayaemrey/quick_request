@@ -185,10 +185,10 @@
       "name": "quick_request",
       "rootUri": "../",
       "packageUri": "lib/",
-      "languageVersion": "3.4"
+      "languageVersion": "3.2"
     }
   ],
-  "generated": "2024-07-27T13:13:19.474568Z",
+  "generated": "2024-08-20T17:51:24.327152Z",
   "generator": "pub",
   "generatorVersion": "3.4.4",
   "flutterRoot": "file:///Users/yunusemrekaya/development/flutter",
