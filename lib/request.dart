@@ -18,7 +18,7 @@ class QuickRequest {
     Map<String, dynamic>? queryParameters,
     RequestMethod requestMethod = RequestMethod.GET,
     bool authorize = false,
-    bool expectJsonArray = false, // JSON array bekleniyor mu?
+    bool expectJsonArray = false, 
   }) async {
     var headers = <String, String>{};
 
