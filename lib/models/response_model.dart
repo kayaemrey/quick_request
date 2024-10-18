@@ -1,24 +1,33 @@
 class ResponseModel<T> {
   final T? data;
-  final bool error;
-  final String message;
+  final bool? error;
+  final String? message;
 
-  ResponseModel({this.data, required this.error, required this.message});
+  ResponseModel({this.data, this.error, this.message});
 
-  factory ResponseModel.fromJson(Map<String, dynamic> json, T Function(Map<String, dynamic>) fromJson) {
+  // JSON'dan model'e dönüştüren fabrika fonksiyonu
+  factory ResponseModel.fromJson(
+    Map<String, dynamic> json, {
+    T Function(dynamic)? fromJson,
+  }) {
+    // Eğer JSON'da 'data' anahtarı yoksa, veriyi doğrudan döndüreceğiz
+    final responseData = json.containsKey('data') ? json['data'] : json;
+
     return ResponseModel<T>(
-      data: fromJson(json['data']),
-      error: json['error'] ?? false,
-      message: json['message'] ?? "",
+      data: fromJson != null ? fromJson(responseData) : responseData as T?,
+      error: json['error'] as bool?,
+      message: json['message'] as String?,
     );
   }
 
-  Map<String, dynamic> toJson(Map<String, dynamic> Function(T) toJson) {
+  // Model'den JSON'a dönüştüren fonksiyon
+  Map<String, dynamic> toJson({
+    Map<String, dynamic> Function(T)? toJson,
+  }) {
     return {
-      // ignore: null_check_on_nullable_type_parameter
-      'data': toJson(data!),
-      'error': error,
-      'message': message,
+      if (data != null) 'data': toJson != null ? toJson(data!) : data,
+      if (error != null) 'error': error,
+      if (message != null) 'message': message,
     };
   }
 }

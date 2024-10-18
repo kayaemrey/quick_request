@@ -1,6 +1,6 @@
-// ignore_for_file: constant_identifier_names
-
-part of 'quick_request.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'models/response_model.dart';
 
 enum RequestMethod {
   GET,
@@ -12,61 +12,95 @@ enum RequestMethod {
 
 class QuickRequest {
   Future<ResponseModel> request({
-    String url = '',
+    required String url,
     String? bearerToken,
     dynamic body,
     Map<String, dynamic>? queryParameters,
     RequestMethod requestMethod = RequestMethod.GET,
     bool authorize = false,
-    bool expectJsonArray = false, 
+    bool expectJsonArray = false,
   }) async {
     var headers = <String, String>{};
-
     if (bearerToken != null && bearerToken.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $bearerToken';
+      headers[HttpHeaders.authorizationHeader] = 'Bearer $bearerToken';
+    }
+    if (requestMethod != RequestMethod.GET) {
+      headers[HttpHeaders.contentTypeHeader] = 'application/json';
     }
 
-    if (requestMethod == RequestMethod.POST || requestMethod == RequestMethod.PUT || requestMethod == RequestMethod.PATCH) {
-      headers['Content-Type'] = 'application/json';
-    }
-
+    // URI ve query params
     var uri = Uri.parse(url);
-
     if (queryParameters != null && queryParameters.isNotEmpty) {
       uri = uri.replace(queryParameters: queryParameters);
     }
 
-    var request = http.Request(requestMethod.name, uri);
+    var client = HttpClient();
 
-    if (requestMethod == RequestMethod.POST || requestMethod == RequestMethod.PUT || requestMethod == RequestMethod.PATCH) {
-      request.body = json.encode(body);
-    }
+    try {
+      HttpClientRequest request = await _createRequest(client, requestMethod, uri);
 
-    request.headers.addAll(headers);
+      // Header'ları tek tek ekleyelim
+      headers.forEach((key, value) {
+        request.headers.set(key, value);
+      });
 
-    http.StreamedResponse response = await request.send();
+      // Body'yi ekleyelim
+      if (body != null && (requestMethod == RequestMethod.POST || requestMethod == RequestMethod.PUT || requestMethod == RequestMethod.PATCH)) {
+        request.add(utf8.encode(json.encode(body)));
+      }
 
-    if (response.statusCode == 200) {
-      var responseBody = await response.stream.bytesToString();
+      // Response'u alalım
+      HttpClientResponse response = await request.close();
+
+      // Yanıtı işle
+      var responseBody = await response.transform(utf8.decoder).join();
       var jsonData = json.decode(responseBody);
 
-      var actualData = jsonData is Map<String, dynamic> && jsonData.containsKey('data')
-          ? jsonData['data']
-          : jsonData;
+      // Eğer array bekleniyorsa, kontrol yap
+      if (expectJsonArray && jsonData is List) {
+        return ResponseModel(
+          data: jsonData,
+          error: false,
+          message: 'Success',
+        );
+      }
+
+      // Eğer "data" varsa onu al, yoksa direkt jsonData
+      var actualData = jsonData is Map<String, dynamic> && jsonData.containsKey('data') ? jsonData['data'] : jsonData;
 
       return ResponseModel(
         data: actualData,
         error: jsonData['error'] ?? false,
-        message: jsonData['message'] ?? "",
+        message: jsonData['message'] ?? 'Success',
       );
-    } else {
-      var responseBody = await response.stream.bytesToString();
-      var jsonData = json.decode(responseBody);
+    } catch (e) {
       return ResponseModel(
         data: null,
         error: true,
-        message: jsonData['message'] ?? 'Failed to load data',
+        message: e.toString(),
       );
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<HttpClientRequest> _createRequest(
+    HttpClient client,
+    RequestMethod requestMethod,
+    Uri uri,
+  ) async {
+    switch (requestMethod) {
+      case RequestMethod.POST:
+        return await client.postUrl(uri);
+      case RequestMethod.PUT:
+        return await client.putUrl(uri);
+      case RequestMethod.PATCH:
+        return await client.patchUrl(uri);
+      case RequestMethod.DELETE:
+        return await client.deleteUrl(uri);
+      case RequestMethod.GET:
+      default:
+        return await client.getUrl(uri);
     }
   }
 }
