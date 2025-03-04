@@ -11,14 +11,14 @@ enum RequestMethod {
 }
 
 class QuickRequest {
-  Future<ResponseModel> request({
+  Future<ResponseModel<T>> request<T>({
     required String url,
     String? bearerToken,
     dynamic body,
     Map<String, dynamic>? queryParameters,
     RequestMethod requestMethod = RequestMethod.GET,
+    required T Function(Map<String, dynamic>) fromJson, // Model dönüşümü için fonksiyon
     bool authorize = false,
-    bool expectJsonArray = false,
   }) async {
     var headers = <String, String>{};
     if (bearerToken != null && bearerToken.isNotEmpty) {
@@ -56,10 +56,12 @@ class QuickRequest {
       var responseBody = await response.transform(utf8.decoder).join();
       var jsonData = json.decode(responseBody);
 
-      // Eğer array bekleniyorsa, kontrol yap
-      if (expectJsonArray && jsonData is List) {
-        return ResponseModel(
-          data: jsonData,
+      // Eğer gelen veri bir liste ise, otomatik olarak listeyi dönüştür
+      if (jsonData is List) {
+        return ResponseModel<T>(
+          data: jsonData
+              .map((item) => fromJson(item as Map<String, dynamic>))
+              .toList() as T,
           error: false,
           message: 'Success',
         );
@@ -68,13 +70,13 @@ class QuickRequest {
       // Eğer "data" varsa onu al, yoksa direkt jsonData
       var actualData = jsonData is Map<String, dynamic> && jsonData.containsKey('data') ? jsonData['data'] : jsonData;
 
-      return ResponseModel(
-        data: actualData,
+      return ResponseModel<T>(
+        data: fromJson(actualData as Map<String, dynamic>),
         error: jsonData['error'] ?? false,
         message: jsonData['message'] ?? 'Success',
       );
     } catch (e) {
-      return ResponseModel(
+      return ResponseModel<T>(
         data: null,
         error: true,
         message: e.toString(),
