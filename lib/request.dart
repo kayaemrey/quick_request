@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'models/response_model.dart';
+import 'interceptor.dart';
 
 enum RequestMethod {
   GET,
@@ -11,14 +12,18 @@ enum RequestMethod {
 }
 
 class QuickRequest {
-  Future<ResponseModel<T>> request<T>({
+  final List<QuickRequestInterceptor> interceptors;
+
+  QuickRequest({this.interceptors = const []});
+
+  Future<ResponseModel> request({
     required String url,
     String? bearerToken,
     dynamic body,
     Map<String, dynamic>? queryParameters,
     RequestMethod requestMethod = RequestMethod.GET,
-    required T Function(Map<String, dynamic>) fromJson, // Model dönüşümü için fonksiyon
-    bool authorize = false,
+    bool expectJsonArray = false,
+    bool retry = false, // JWT refresh için
   }) async {
     var headers = <String, String>{};
     if (bearerToken != null && bearerToken.isNotEmpty) {
@@ -28,7 +33,6 @@ class QuickRequest {
       headers[HttpHeaders.contentTypeHeader] = 'application/json';
     }
 
-    // URI ve query params
     var uri = Uri.parse(url);
     if (queryParameters != null && queryParameters.isNotEmpty) {
       uri = uri.replace(queryParameters: queryParameters);
@@ -39,44 +43,77 @@ class QuickRequest {
     try {
       HttpClientRequest request = await _createRequest(client, requestMethod, uri);
 
-      // Header'ları tek tek ekleyelim
+      // Header'ları ekle
       headers.forEach((key, value) {
         request.headers.set(key, value);
       });
 
-      // Body'yi ekleyelim
-      if (body != null && (requestMethod == RequestMethod.POST || requestMethod == RequestMethod.PUT || requestMethod == RequestMethod.PATCH)) {
+      // Interceptor: onRequest
+      for (final interceptor in interceptors) {
+        await interceptor.onRequest(request);
+      }
+
+      // Body'yi ekle
+      if (body != null &&
+          (requestMethod == RequestMethod.POST ||
+              requestMethod == RequestMethod.PUT ||
+              requestMethod == RequestMethod.PATCH)) {
         request.add(utf8.encode(json.encode(body)));
       }
 
-      // Response'u alalım
       HttpClientResponse response = await request.close();
 
-      // Yanıtı işle
+      // Interceptor: onResponse
+      for (final interceptor in interceptors) {
+        await interceptor.onResponse(response);
+      }
+
+      // JWT refresh için 401 kontrolü
+      if (response.statusCode == 401 && !retry) {
+        // Interceptor'lerden biri bir refresh işlemi başlatabilir
+        String? refreshedToken;
+        for (final interceptor in interceptors) {
+          if (interceptor is JwtRefreshInterceptor) {
+            refreshedToken = await interceptor.refreshTokenFunc();
+            break;
+          }
+        }
+        if (refreshedToken != null && refreshedToken.isNotEmpty) {
+          // Aynı isteği yeni token ile tekrar gönder
+          return await this.request(
+            url: url,
+            bearerToken: refreshedToken,
+            body: body,
+            queryParameters: queryParameters,
+            requestMethod: requestMethod,
+            expectJsonArray: expectJsonArray,
+            retry: true,
+          );
+        }
+      }
+
       var responseBody = await response.transform(utf8.decoder).join();
       var jsonData = json.decode(responseBody);
 
-      // Eğer gelen veri bir liste ise, otomatik olarak listeyi dönüştür
-      if (jsonData is List) {
-        return ResponseModel<T>(
-          data: jsonData
-              .map((item) => fromJson(item as Map<String, dynamic>))
-              .toList() as T,
+      if (expectJsonArray && jsonData is List) {
+        return ResponseModel(
+          data: jsonData,
           error: false,
           message: 'Success',
         );
       }
 
-      // Eğer "data" varsa onu al, yoksa direkt jsonData
-      var actualData = jsonData is Map<String, dynamic> && jsonData.containsKey('data') ? jsonData['data'] : jsonData;
-
-      return ResponseModel<T>(
-        data: fromJson(actualData as Map<String, dynamic>),
+      return ResponseModel(
+        data: jsonData['data'],
         error: jsonData['error'] ?? false,
         message: jsonData['message'] ?? 'Success',
       );
     } catch (e) {
-      return ResponseModel<T>(
+      // Interceptor: onError
+      for (final interceptor in interceptors) {
+        await interceptor.onError(e);
+      }
+      return ResponseModel(
         data: null,
         error: true,
         message: e.toString(),
@@ -104,5 +141,43 @@ class QuickRequest {
       default:
         return await client.getUrl(uri);
     }
+  }
+}
+
+/// JWT Refresh interceptor örneği
+class JwtRefreshInterceptor extends QuickRequestInterceptor {
+  /// Güncel access token'ı getir
+  final Future<String?> Function() getAccessToken;
+  /// Yeni access token almak için refresh işlemi
+  final Future<String?> Function() refreshToken;
+  String? _latestToken;
+
+  JwtRefreshInterceptor({
+    required this.getAccessToken,
+    required this.refreshToken,
+  });
+
+  /// QuickRequest 401 aldığında bu fonksiyonu çağırır
+  Future<String?> refreshTokenFunc() async {
+    _latestToken = await refreshToken();
+    return _latestToken;
+  }
+
+  @override
+  Future<void> onRequest(HttpClientRequest request) async {
+    final token = _latestToken ?? await getAccessToken();
+    if (token != null && token.isNotEmpty) {
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+    }
+  }
+
+  @override
+  Future<void> onResponse(HttpClientResponse response) async {
+    // Burada ekstra bir şey yapmana gerek yok, 401 olursa QuickRequest tekrar çağıracak
+  }
+
+  @override
+  Future<void> onError(Object error) async {
+    // Hata loglama veya özel yönetim yapılabilir
   }
 }

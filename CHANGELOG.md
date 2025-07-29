@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.0.7
+
 ## 0.0.6
 - **New Feature:** Improved error handling for HTTP requests.
 - **Enhancement:** Optimized response parsing logic for better performance.

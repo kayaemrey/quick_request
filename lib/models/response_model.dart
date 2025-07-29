@@ -8,12 +8,10 @@ class ResponseModel<T> {
   // JSON'dan model'e dönüştüren fabrika fonksiyonu
   factory ResponseModel.fromJson(
     Map<String, dynamic> json, {
-    required T Function(dynamic) fromJson,
+    T Function(dynamic)? fromJson,
   }) {
-    final responseData = json.containsKey('data') ? json['data'] : json;
-
     return ResponseModel<T>(
-      data: fromJson(responseData),
+      data: json['data'],
       error: json['error'] as bool?,
       message: json['message'] as String?,
     );
@@ -21,10 +19,10 @@ class ResponseModel<T> {
 
   // Model'den JSON'a dönüştüren fonksiyon
   Map<String, dynamic> toJson({
-    required Map<String, dynamic> Function(T) toJson,
+    Map<String, dynamic> Function(T)? toJson,
   }) {
     return {
-      if (data != null) 'data': toJson(data!),
+      if (data != null) 'data': toJson != null ? toJson(data!) : data,
       if (error != null) 'error': error,
       if (message != null) 'message': message,
     };
