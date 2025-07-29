@@ -1,171 +1,257 @@
 # Quick Request
 
-The `quick_request` Flutter package allows you to make HTTP requests quickly and easily. Using the `http` package, you can perform API requests in a simple and effective manner.
+**Quick Request** is a modern, developer-friendly HTTP client package for Flutter.  
+It brings a clean, type-safe, and extensible API for making HTTP requests with minimal boilerplate code, advanced features like interceptors, JWT auto-refresh, request cancellation, caching, and more.
+
+---
 
 ## Features
 
-- Easy HTTP requests (GET, POST, PUT, PATCH, DELETE)
-- `ResponseModel` class for handling responses
-- Automatic encoding and decoding of JSON data
+- Easy HTTP requests: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`
+- Type-safe automatic JSON serialization/deserialization
+- Powerful interceptors (logging, authentication, etc.)
+- JWT auto-refresh support
+- Global and per-request headers, query, and path parameters
+- Request cancellation and timeout
+- Response caching and mock support
+- File upload/download with progress tracking
+- Unified response model and error handling
+- Short, chainable API for rapid development
 
-## Usage
+---
 
-##### GET Request
+## Installation
+
+Add the following to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  quick_request: ^0.1.1
+```
+
+---
+
+## Getting Started
+
+Import the package:
 
 ```dart
-  Future<ResponseModel<List<Post>>> fetchPosts() async {
-  return await QuickRequest().request<List<Post>>(
-    url: "https://api.example.com/posts",
+import 'package:quick_request/quick_request.dart';
+```
+
+---
+
+## Quick Examples
+
+### 1. Basic GET Request
+
+```dart
+final quick = QuickRequest(baseUrl: "https://api.example.com");
+
+final response = await quick.url("/posts").get<List<Post>>(
+  fromJson: (json) => Post.fromJson(json),
+  expectJsonArray: true,
+);
+
+if (!response.error) {
+  print(response.data); // List<Post>
+}
+```
+
+---
+
+### 2. POST Request
+
+```dart
+final response = await quick.url("/posts").body({
+  "title": "New Post",
+}).post<Post>(
+  fromJson: (json) => Post.fromJson(json),
+);
+
+print(response.data?.id);
+```
+
+---
+
+### 3. PUT & PATCH Request
+
+```dart
+// PUT
+await quick.url("/posts/1").body({"title": "Updated"}).put<Post>(
+  fromJson: (json) => Post.fromJson(json),
+);
+
+// PATCH
+await quick.url("/posts/1").body({"title": "Patched"}).patch<Post>(
+  fromJson: (json) => Post.fromJson(json),
+);
+```
+
+---
+
+### 4. DELETE Request
+
+```dart
+await quick.url("/posts/1").delete<void>(
+  fromJson: (_) => null,
+);
+```
+
+---
+
+### 5. Authorized Request (Bearer Token)
+
+```dart
+final token = await LocalManager().getStringValue("accessToken");
+await quick
+  .url("/secure-posts")
+  .headers({"Authorization": "Bearer $token"})
+  .get<List<Post>>(
     fromJson: (json) => Post.fromJson(json),
+    expectJsonArray: true,
   );
+```
+
+---
+
+### 6. Query & Path Parameters
+
+```dart
+// Query
+await quick.url("/posts").query({"userId": "1"}).get<List<Post>>(
+  fromJson: (json) => Post.fromJson(json),
+  expectJsonArray: true,
+);
+
+// Path
+await quick.url("/user/{id}").pathParams({"id": 5}).get<User>(
+  fromJson: (json) => User.fromJson(json),
+);
+```
+
+---
+
+### 7. Request Cancellation & Timeout
+
+```dart
+final cancelToken = CancelToken();
+quick.url("/slow-endpoint").cancelToken(cancelToken).get();
+cancelToken.cancel(); // Cancel the request
+
+// Timeout
+await quick.url("/posts").timeout(Duration(seconds: 5)).get<List<Post>>(
+  fromJson: (json) => Post.fromJson(json),
+  expectJsonArray: true,
+);
+```
+
+---
+
+### 8. File Upload
+
+```dart
+final fileBytes = await File("path/to/file").readAsBytes();
+
+await quick
+  .url("/upload")
+  .body({"file": fileBytes})
+  .post<Map<String, dynamic>>(
+    fromJson: (json) => json,
+  );
+```
+
+---
+
+### 9. Response Caching
+
+```dart
+final quick = QuickRequest(
+  baseUrl: "https://api.example.com",
+  cacheManager: CacheManager(),
+);
+
+await quick.url("/posts").get<List<Post>>(
+  fromJson: (json) => Post.fromJson(json),
+  expectJsonArray: true,
+  useCache: true,
+);
+```
+
+---
+
+### 10. Error Handling
+
+```dart
+try {
+  final response = await quick.url("/user/me").get<User>(
+    fromJson: (json) => User.fromJson(json),
+  );
+} on UnauthorizedException {
+  // Handle token expired
+} on NetworkException {
+  // Handle no connection
+} catch (e) {
+  // Handle other errors
 }
 ```
 
-##### POST Request
+---
+
+### 11. Interceptors (Logging & JWT Refresh)
 
 ```dart
-  Future<ResponseModel<Post>> createPost(Map<String, dynamic> data) async {
-  return await QuickRequest().request<Post>(
-    url: "https://api.example.com/posts",
-    body: data,
-    requestMethod: RequestMethod.POST,
-    fromJson: (json) => Post.fromJson(json),
-  );
-}
-
+final quick = QuickRequest(
+  baseUrl: "https://api.example.com",
+  interceptors: [
+    LoggingInterceptor(),
+    JwtRefreshInterceptor(
+      getAccessToken: () async => await LocalManager().getStringValue("accessToken"),
+      refreshToken: () async {
+        // Your refresh logic here
+      },
+    ),
+  ],
+);
 ```
 
-##### PUT Request
+---
+
+### 12. With UI Feedback (e.g., using `alert_craft`)
 
 ```dart
-  Future<ResponseModel<Post>> updatePost(int id, Map<String, dynamic> data) async {
-  return await QuickRequest().request<Post>(
-    url: "https://api.example.com/posts/$id",
-    body: data,
-    requestMethod: RequestMethod.PUT,
-    fromJson: (json) => Post.fromJson(json),
-  );
-}
-
-```
-
-##### DELETE Request
-
-```dart
-  Future<ResponseModel<void>> deletePost(int id) async {
-  return await QuickRequest().request<void>(
-    url: "https://api.example.com/posts/$id",
-    requestMethod: RequestMethod.DELETE,
-    fromJson: (_) => null, // DELETE için genelde dönüşüm gerekmez
-  );
-}
-
-
-```
-
-##### PATCH Request
-
-```dart
-  Future<ResponseModel<Post>> patchPost(int id, Map<String, dynamic> data) async {
-  return await QuickRequest().request<Post>(
-    url: "https://api.example.com/posts/$id",
-    body: data,
-    requestMethod: RequestMethod.PATCH,
-    fromJson: (json) => Post.fromJson(json),
-  );
-}
-
-```
-
-##### Authorized Request
-
-```dart
-  Future<ResponseModel<List<Post>>> fetchSecurePosts() async {
-  String? token = LocalManager().getStringValue(LocalManagerKeys.accessToken);
-  return await QuickRequest().request<List<Post>>(
-    url: "https://api.example.com/secure-posts",
-    bearerToken: token,
-    fromJson: (json) => Post.fromJson(json),
-  );
-}
-
-```
-
-##### GET Request with Query Parameters
-
-```dart
-  Future<ResponseModel<List<Post>>> fetchPostsWithQueryParameters() async {
-  return await QuickRequest().request<List<Post>>(
-    url: "https://api.example.com/posts",
-    queryParameters: {
-      "userId": "1",
-    },
-    fromJson: (json) => Post.fromJson(json),
-  );
-}
-
-
-```
-
-##### Example PATCH Request
-
-```dart
-  Future<ResponseModel<Post>> patchPostExample(int postId, String newTitle) async {
-  return await QuickRequest().request<Post>(
-    url: "https://api.example.com/posts/$postId",
-    body: {"title": newTitle},
-    requestMethod: RequestMethod.PATCH,
-    fromJson: (json) => Post.fromJson(json),
-  );
-}
-
-
-```
-
-##### with alert_craft usage
-
-```dart
-  Future<void> _fetchData() async {
+Future<void> _fetchData() async {
   final apiRequest = QuickRequest();
   try {
-    final response = await apiRequest.request<Post>(
-      url: 'https://api.example.com/posts/1',
+    final response = await apiRequest.url('/posts/1').get<Post>(
       fromJson: (json) => Post.fromJson(json),
     );
-    if (!response.error!) {
-      setState(() {
-        ShowAlert().showToastMessage(
-          type: 1,
-          title: "Başarılı",
-          description: response.data?.title ?? "",
-        );
-      });
+    if (!response.error) {
+      ShowAlert().showToastMessage(
+        type: 1,
+        title: "Success",
+        description: response.data?.title ?? "",
+      );
     } else {
-      setState(() {
-        ShowAlert().showAlertDialog(
-          type: 1,
-          title: "Hata",
-          description: response.message ?? "Bilinmeyen bir hata oluştu",
-        );
-      });
-    }
-  } catch (e) {
-    setState(() {
       ShowAlert().showAlertDialog(
         type: 1,
-        title: "Exception",
-        description: e.toString(),
+        title: "Error",
+        description: response.message ?? "Unknown error occurred",
       );
-    });
+    }
+  } catch (e) {
+    ShowAlert().showAlertDialog(
+      type: 1,
+      title: "Exception",
+      description: e.toString(),
+    );
   }
 }
-
-
 ```
 
-## Örnek Model
+---
 
-Aşağıda bir Post sınıfı örneği verilmiştir:
+## 🧩 Model Example
 
 ```dart
 class Post {
@@ -176,7 +262,7 @@ class Post {
 
   factory Post.fromJson(Map<String, dynamic> json) {
     return Post(
-            id: json['id'],
+      id: json['id'],
       title: json['title'],
     );
   }
@@ -188,13 +274,57 @@ class Post {
     };
   }
 }
-
 ```
 
-## Installation
+---
 
-To add the `quick_request` package to your project, include the following line in your `pubspec.yaml` file:
+##  Response Model
 
-```yaml
-dependencies:
-  quick_request: ^0.0.1
+All requests return a `ResponseModel<T>`:
+
+```dart
+class ResponseModel<T> {
+  final T? data;
+  final bool error;
+  final String? message;
+  final int? statusCode;
+
+  // ...
+}
+```
+
+---
+
+## API Reference
+
+- `QuickRequest(baseUrl, interceptors, cacheManager)`
+- `.url(String path)`
+- `.query(Map<String, dynamic>)`
+- `.pathParams(Map<String, dynamic>)`
+- `.headers(Map<String, String>)`
+- `.body(dynamic)`
+- `.timeout(Duration)`
+- `.onProgress(ProgressCallback)`
+- `.cancelToken(CancelToken)`
+- `.get<T>({ fromJson, expectJsonArray, useCache })`
+- `.post<T>({ fromJson, expectJsonArray })`
+- `.put<T>({ fromJson, expectJsonArray })`
+- `.patch<T>({ fromJson, expectJsonArray })`
+- `.delete<T>({ fromJson, expectJsonArray })`
+
+---
+
+## License
+
+MIT
+
+---
+
+## Contributing
+
+Pull requests and feature requests are welcome!  
+For major changes, please open an issue first to discuss what you would like to change.
+
+---
+
+**Enjoy rapid and professional API development with Quick Request!**

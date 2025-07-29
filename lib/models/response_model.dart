@@ -1,30 +1,25 @@
 class ResponseModel<T> {
   final T? data;
-  final bool? error;
+  final bool error;
   final String? message;
+  final int? statusCode;
 
-  ResponseModel({this.data, this.error, this.message});
+  ResponseModel({
+    this.data,
+    this.error = false,
+    this.message,
+    this.statusCode,
+  });
 
-  // JSON'dan model'e dönüştüren fabrika fonksiyonu
   factory ResponseModel.fromJson(
     Map<String, dynamic> json, {
     T Function(dynamic)? fromJson,
   }) {
     return ResponseModel<T>(
-      data: json['data'],
-      error: json['error'] as bool?,
-      message: json['message'] as String?,
+      data: fromJson != null && json['data'] != null ? fromJson(json['data']) : json['data'],
+      error: json['error'] ?? false,
+      message: json['message'],
+      statusCode: json['statusCode'],
     );
-  }
-
-  // Model'den JSON'a dönüştüren fonksiyon
-  Map<String, dynamic> toJson({
-    Map<String, dynamic> Function(T)? toJson,
-  }) {
-    return {
-      if (data != null) 'data': toJson != null ? toJson(data!) : data,
-      if (error != null) 'error': error,
-      if (message != null) 'message': message,
-    };
   }
 }
